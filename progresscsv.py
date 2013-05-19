@@ -19,6 +19,7 @@ History:
   20120325 - RGM: add FITS file output using ATpy and asciitable
   20120330 - RGM: played with read and readlines methods
   20120331 - RGM: added option to append existing runfiles
+  20130519 - RGM: added support for username, password in config file
 
 """
 
