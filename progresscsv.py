@@ -8,7 +8,7 @@
 
  Useage:
 
- python progresscsv.py
+ python progresscsatpv.py
 
  You may need to customise some of the login and program information
 
@@ -24,18 +24,22 @@ History:
 
 """
 
+debug=True
+
 import os, sys, re, string
 import urllib, urllib2, cookielib
+
 from MultipartPostHandler import MultipartPostHandler
+if debug: print('MultipartPostHandler.__file__: ',MultipartPostHandler.__file__)
 
-import atpy
-#import csv
+#import atpy
+from astropy.table import Table
 
-try:
-  import pyfits
-  print 'pyfits.__version__: ', pyfits.__version__
-except ImportError:
-  print "ImportError: pyfits not available"
+#try:
+#  import pyfits
+#  print 'pyfits.__version__: ', pyfits.__version__
+#except ImportError:
+#  print "ImportError: pyfits not available"
 
 import time
 from time import strftime, gmtime
@@ -63,7 +67,6 @@ parser.add_option("-v", "--verbose", dest="verbose",
 start = time.time()
 
 
-
 def _check_perms(fname):
         import stat
         fname=os.path.expanduser(fname)
@@ -77,6 +80,7 @@ def _check_perms(fname):
 
 security_check=_check_perms('progresscsv.cfg')
 
+
 import ConfigParser
 config = ConfigParser.RawConfigParser()
 config.read('progresscsv.cfg')
@@ -85,9 +89,7 @@ PASSWORD=config.get('vhs', 'password')
 PROGRAM=config.get('vhs', 'program')
 OUTPATH_ROOT=config.get('vhs', 'outpath')
 
-
-
-
+progid='179A2010'
 
 # no changes should be needed below
 if not date: date = strftime("%Y%m%d", gmtime())
@@ -157,14 +159,16 @@ if not append:
 
 # filename for summary of all run files appended
 # each observing period has a separate file of form '179A2010[A to Z].csv'
-runfiles_all='179A2010.csv'
+
+
+runfiles_all= progid +'.csv'
 fh = open(os.path.join(outpath, runfiles_all), 'w')
 
-fitsfile_all='179A2010.fits'
+fitsfile_all= progid + '.fits'
 
 for l in string.uppercase:
-    runfile='179A2010%s.csv' % l
-    fitsfile='179A2010%s.fits' % l
+    runfile=progid+'%s.csv' % l
+    fitsfile=progid+'%s.fits' % l
     print 'Reading: ',runfile
 
     try:
@@ -213,10 +217,12 @@ for l in string.uppercase:
         # read result atpy table
         if table:
                     print 'Read csv into table using atpy '
-                    table = atpy.Table(result, type='ascii')
-                    table.describe()
-                    print len(table)
-                    print table.shape
+                    #table = atpy.Table(result, type='ascii')
+                    table = Table.read(result, format='ascii')
+                    #table.describe()
+                    print 'Number of rows: ', len(table)
+                    #help(table)
+                    #print table.shape
 		    fitsfile= os.path.join(outpath, fitsfile)
                     print 'Writing FITs file: ', fitsfile
 		    table.write(fitsfile, overwrite=True)
@@ -254,15 +260,18 @@ for l in string.uppercase:
         print "Unexpected error:", sys.exc_info()[0]
         print "Unexpected error:", sys.exc_info()
         print 'Problem reading: ',runfile
+        print('Could be the end of the loop and runfile does not exist')
         break
 
                 
 fh.close()
 # read result atpy table 
-table_all = atpy.Table(summary, type='ascii')
+#atpy.Table(result, type='ascii')
+#table_all = atpy.Table(summary, type='ascii')
+table_all = Table.read(summary, format='ascii')
 print len(table_all)
-print table_all.shape
-table_all.describe()
+#print table_all.shape
+#table_all.describe()
 
 ResultFile= os.path.join(outpath, fitsfile_all)
 table_all.write(ResultFile, overwrite=True) 
