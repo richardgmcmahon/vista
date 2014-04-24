@@ -2,6 +2,7 @@
  Download Survey progress csv table from ESO portal
 
  TODO:
+ convert to astropy
  make it smart enough to iterate on the RUNS A. B etc
 
 
