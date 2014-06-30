@@ -12,6 +12,11 @@
 
  You may need to customise some of the login and program information
 
+Was of the form:
+http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv
+
+URL of form on 2014-06-30
+http://www.eso.org/observing/usg/status_pl/csv/179A2010A.csv?ticket=ST-411808-AnVQNiHsjj6k7MPlTZcs-sso
 
 History:
   20110210 - EGS: Original
@@ -175,7 +180,7 @@ for l in string.uppercase:
         if not append:
             print 'Reading via http: '
             # using urllib2
-            result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).readlines()
+            result=opener.open("http://www.eso.org/observing/usg/status_pl/csv/" + runfile).readlines()
             print type(result), len(result)
 
             #result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()           
