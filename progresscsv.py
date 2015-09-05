@@ -1,14 +1,38 @@
 """
  Download Survey progress csv table from ESO portal
 
+ e.g.
+
+
+ http://www.eso.org/observing/usg/status_pl/csv/179A2010L.csv
+
+ Each observing period has a separate csv file for the submitted OBs.
+ OBs submitted in one period may be carried over to later period but
+ the results will be in the csv file for the submitted period.
+
+ Each period csv file is copied and a FITs file is created. A summary
+ csv and FITs format file is also created by appending all the files.
+
+ Appending the fits files is by reading back the appended csv file
+ to get around fact that number of characters per column is 
+ different in each file and the in memory version has fixed char
+ width columns
+
+
  TODO:
  convert to astropy
  make it smart enough to iterate on the RUNS A. B etc
 
+ 
+
 
  Useage:
 
- python progresscsatpv.py
+ python progresscsv.py
+
+ Options:
+
+ append: append exsiting files rather than downloading data
 
  You may need to customise some of the login and program information
 
@@ -18,6 +42,8 @@ http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv
 URL of form on 2014-06-30
 http://www.eso.org/observing/usg/status_pl/csv/179A2010A.csv?ticket=ST-411808-AnVQNiHsjj6k7MPlTZcs-sso
 
+
+
 History:
   20110210 - EGS: Original
   2011XXXX - RGM: various tweaks
@@ -26,19 +52,35 @@ History:
   20120330 - RGM: played with read and readlines methods
   20120331 - RGM: added option to append existing runfiles
   20130519 - RGM: added support for username, password in config file
+  20140725 - RGM: changed the ESO URL
+  20140725 - RGM: added ability to skip the extra line at start added by ESO
+  20140812 - RGM: commented out SSO check since URL not found and not needed anyway!
 
 """
+
+
+
 
 debug=True
 
 import os, sys, re, string
+
+import traceback
+
 import urllib, urllib2, cookielib
 
-from MultipartPostHandler import MultipartPostHandler
-if debug: print('MultipartPostHandler.__file__: ',MultipartPostHandler.__file__)
+import numpy as np
+
+#from MultipartPostHandler import MultipartPostHandler
+import MultipartPostHandler
+
+if debug: print 'MultipartPostHandler.__file__: ', MultipartPostHandler.__file__
 
 #import atpy
-from astropy.table import Table
+import astropy
+print 'astropy.__version__: ', astropy.__version__
+
+from astropy.table import Table, vstack
 
 #try:
 #  import pyfits
@@ -49,6 +91,97 @@ from astropy.table import Table
 import time
 from time import strftime, gmtime
 from optparse import OptionParser
+
+
+
+def plot_radec(ra, dec, title=None, xlabel=None, ylabel=None,
+  rarange=None, decrange=None, showplots=False, figfile=None):
+
+  import matplotlib.pyplot as plt
+  #plt.setp(lines, edgecolors='None')
+
+  if figfile == None: figfile='radec.png'
+
+  plt.figure(num=None, figsize=(9.0, 6.0))
+
+  plt.xlabel('RA')
+  if xlabel != None: plt.xlabel(xlabel)
+  plt.ylabel('Dec')
+  if ylabel != None: plt.ylabel(ylabel)
+  if title != None: plt.title(title)
+
+  ms=1.0
+
+  xdata=ra
+  ydata=dec
+
+
+  print min(xdata), max(xdata)
+  print min(ydata), max(ydata)
+
+  #plt.xlim([0,360])
+  #plt.ylim([-90,30])
+
+  ms=1.0
+  plt.plot(xdata, ydata, 'og', markeredgecolor='b', ms=ms)
+  #plotid.plotid()
+
+  if rarange != None: plt.xlim(rarange)
+  if decrange!= None: plt.ylim(decrange)
+
+  ndata=len(xdata)
+  print 'Number of data points plotted: ', ndata
+  plt.legend(['n: '+ str(ndata)], 
+   fontsize='small', loc='upper right', numpoints=1, scatterpoints=1)
+
+  if showplots: plt.show()
+
+  print 'Saving: ', figfile
+  plt.savefig(figfile)
+
+
+
+def plot_raextime(xdata, ydata, title=None, xlabel=None, ylabel=None,
+  rarange=None, decrange=None, showplots=False, figfile=None):
+
+  import matplotlib.pyplot as plt
+  #plt.setp(lines, edgecolors='None')
+
+  if figfile == None: figfile='raextime.png'
+
+  plt.figure(num=None, figsize=(9.0, 6.0))
+
+  plt.xlabel('RA')
+  if xlabel != None: plt.xlabel(xlabel)
+  plt.ylabel('Execution Time(s)')
+  if ylabel != None: plt.ylabel(ylabel)
+  if title != None: plt.title(title)
+
+  ms=1.0
+
+  print min(xdata), max(xdata)
+  print min(ydata), max(ydata)
+
+  #plt.xlim([0,360])
+  #plt.ylim([-90,30])
+
+  ms=1.0
+  plt.plot(xdata, ydata, 'og', markeredgecolor='b', ms=ms)
+  #plotid.plotid()
+
+  if rarange != None: plt.xlim(rarange)
+  if decrange!= None: plt.ylim(decrange)
+
+  ndata=len(xdata)
+  print 'Number of data points plotted: ', ndata
+  plt.legend(['n: '+ str(ndata)], 
+   fontsize='small', loc='upper right', numpoints=1, scatterpoints=1)
+
+  if showplots: plt.show()
+
+  print 'Saving: ', figfile
+  plt.savefig(figfile)
+
 
 
 verbose=1
@@ -83,6 +216,7 @@ def _check_perms(fname):
                 raise IOError(err)
 
 
+# the cfg file contains a password so it might be readonly 
 security_check=_check_perms('progresscsv.cfg')
 
 
@@ -99,11 +233,25 @@ progid='179A2010'
 # no changes should be needed below
 if not date: date = strftime("%Y%m%d", gmtime())
 
+print 'OUTPATH_ROOT: ', OUTPATH_ROOT
 outpath= os.path.join(OUTPATH_ROOT, date)
 print 'outpath: ' + outpath
 
 if not os.path.isdir(outpath):
     os.mkdir(outpath)
+
+# make convenience link to current progress files
+# os.symlink(src, dest)
+# e.g ln -s /data/vhs/progress/20140727 /data/vhs/progress/current
+src=outpath
+print 'src:  ', src
+dest=OUTPATH_ROOT + '/current'
+print 'dest: ', dest
+if os.path.exists(dest): 
+  if os.path.islink(dest):
+    os.unlink(dest)
+
+os.symlink(src, dest)
 
 time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
 
@@ -120,6 +268,11 @@ if not append:
   cj=cookielib.CookieJar()
   cj.extract_cookies(response, request)
   print 'ESO Cookie: ', [str(i) for i in cj]
+
+  for cookie in cj:
+    print('Cookie: %s --> %s'%(cookie.name,cookie.value))
+
+
   opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
 
   # Extract token
@@ -150,11 +303,11 @@ if not append:
 	print 'ESO Portal Login Failed'
 	
 
-  res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
+  #res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
 
   # Check if that pages sees my credentials
-  if res.find(USERNAME)>0:
-	print 'Ok seems to work'
+  #if res.find(USERNAME)>0:
+  #	print 'Ok seems to work'
 
 	
 # copy and print the file
@@ -165,24 +318,32 @@ if not append:
 # filename for summary of all run files appended
 # each observing period has a separate file of form '179A2010[A to Z].csv'
 
-
 runfiles_all= progid +'.csv'
-fh = open(os.path.join(outpath, runfiles_all), 'w')
+fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
 
 fitsfile_all= progid + '.fits'
 
-for l in string.uppercase:
-    runfile=progid+'%s.csv' % l
-    fitsfile=progid+'%s.fits' % l
+# loop through A-Z via string.uppercase which contains [A-Z]
+for run in string.uppercase:
+    runfile=progid+'%s.csv' % run
+    fitsfile=progid+'%s.fits' % run
     print 'Reading: ',runfile
 
+    # try until ends the end of the run sequence
     try:
         if not append:
-            print 'Reading via http: '
+            print 'Reading via http: ', runfile
             # using urllib2
             result=opener.open("http://www.eso.org/observing/usg/status_pl/csv/" + runfile).readlines()
-            print type(result), len(result)
+            print 'Read remote file into readline list: ', type(result), len(result)
+            preamble=result[0]
+            print 'preamble: ', len(preamble)
+            print preamble
+            header=result[1]
+            print 'header: ', len(header)
+            print header
 
+            #old URL
             #result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()           
             #print type(result), len(result)
         if pause: raw_input("Press ENTER to continue: ")
@@ -200,6 +361,7 @@ for l in string.uppercase:
             #result.describe()
 
         print 'Number of records read in: ',len(result)
+
         if pause: raw_input("Press ENTER to continue: ")
             #info(result)
             #a=type(result)
@@ -212,51 +374,64 @@ for l in string.uppercase:
         if not append:
             ResultFile= os.path.join(outpath, runfile)
             print 'Open: ', ResultFile
-            f=open(ResultFile, 'w')
+            fh_csv=open(ResultFile, 'w')
             tmp=string.join(result)
             print 'Write: ', ResultFile
-            f.write(tmp)
-            f.close()
+            fh_csv.write(tmp)
+            fh_csv.close()
             print 'Close: ', ResultFile
 
         # read result atpy table
         if table:
-                    print 'Read csv into table using atpy '
-                    #table = atpy.Table(result, type='ascii')
-                    table = Table.read(result, format='ascii')
-                    #table.describe()
-                    print 'Number of rows: ', len(table)
-                    #help(table)
-                    #print table.shape
-		    fitsfile= os.path.join(outpath, fitsfile)
-                    print 'Writing FITs file: ', fitsfile
-		    table.write(fitsfile, overwrite=True)
-                    print 'Close FITs file:   ', fitsfile
-                  
-                # write the appended results; each ASCII write appends to
-                # opened file; ascii data is also appended in memory
-        if l=='A':
-                        summary=result
-                        print 'Writing summary: ',runfiles_all
-                        print len(summary)
-                        tmp=string.join(summary)
-                        fh.write(tmp)
-			#fh.write(summary)
-        else:   # Skip first line of column info that is in each file
-                        # locate the first end of line with .read is used
-                        # j = result.find('\n')
-                        # fh.write(result[j+1:])
-                        print 'Writing summary: ',runfiles_all
-                        tmp=string.join(result[1:])
-			#fh.write(result[1:])
-                        fh.write(tmp)
-                        print 'Append data in memory: '
-                        # do not use join since seems to run away
-                        #summary=summary.join(result)
-                        summary += result[1:]
-                        print result[0]
-                        print result[1]
-                        print 'Summary : ', len(summary)
+            # result is the ascii csv in memory '
+            print 'Read csv into table '
+	    #table = atpy.Table(result, type='ascii')
+	    data_start=2
+	    header_start=1
+	    table = Table.read(result, format='ascii', 
+	     data_start=data_start, header_start=header_start)
+	    print table.colnames
+	    #table.describe()
+	    print 'Number of rows: ', len(table)
+	    #help(table)
+	    #print table.shape
+	    fitsfile= os.path.join(outpath, fitsfile)
+	    print 'Writing FITs file: ', fitsfile
+	    table.write(fitsfile, overwrite=True)
+	    print 'Close FITs file:   ', fitsfile
+
+	# write the appended results; each ASCII write appends to
+	# opened file; ascii data is also appended in memory
+
+	print 'Run: ', run
+        if run=='A':
+            summary=result
+	    #help(summary)
+	    print 'Number of rows: ', len(result)
+	    #tmp=string.join(summary)
+	    #fh.write(tmp)
+	    #fh.write(summary)
+        else:  
+            # Skip first line of column info that is in each file
+            # locate the first end of line with .read is used
+            # j = result.find('\n')
+            # fh.write(result[j+1:])
+            nskip=2
+	    print 'Number of rows in previous summary: ', len(summary)
+    	    #help(summary)
+	    print 'Number of rows to be appended: ', len(result)-nskip
+	    #help(result)
+	    print 'Writing appended csv file: ',runfiles_all
+
+	    tmp=summary + result[nskip:]
+            summary=tmp
+	    new=string.join(tmp)
+	    print 'Number of rows: ', len(new)
+	    #fh.write(result[1:])
+	    fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
+	    fh_csv_all.write(new)
+	    print 'Write summary completed: ',len(new)
+
         print
         if pause: raw_input("Press ENTER to continue: ")
 
@@ -269,18 +444,47 @@ for l in string.uppercase:
         break
 
                 
-fh.close()
+fh_csv_all.close()
+runfiles_all= progid +'.csv'
+
 # read result atpy table 
 #atpy.Table(result, type='ascii')
 #table_all = atpy.Table(summary, type='ascii')
-table_all = Table.read(summary, format='ascii')
-print len(table_all)
-#print table_all.shape
-#table_all.describe()
+#help(summary)
+
+table = Table.read(summary, format='ascii', 
+  data_start=data_start, header_start=header_start)
+print table.colnames
 
 ResultFile= os.path.join(outpath, fitsfile_all)
-table_all.write(ResultFile, overwrite=True) 
-
+table.write(ResultFile, overwrite=True)
 end = time.time()
 elapsed = end - start
+print "Summary file created: ", ResultFile
 print "Time taken: ", elapsed, "seconds."
+
+
+fitsfile=outpath + '/' + fitsfile_all
+figfile=outpath + '/' + 'progress_radec.png'
+print 'Reading: ', fitsfile
+table.read(fitsfile)
+print table.colnames
+ra=table['RA (hrs)']
+dec=table['DEC (deg)']
+executionTime=table['Execution time (s)']
+print 'Number of rows read in: ', len(ra)
+plot_radec(ra, dec, title='VHS Progress: ' + fitsfile,
+   figfile=figfile,
+   rarange=[0.0, 24.0], decrange=[-90.0, 10.0])
+
+figfile=outpath + '/' + 'progress_ra_executiontime.png'
+plot_raextime(ra, executionTime, title='VHS Progress: ' + fitsfile,
+   figfile=figfile,
+   rarange=[0.0, 24.0])
+
+
+
+
+
+
+
