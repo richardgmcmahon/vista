@@ -334,7 +334,9 @@ for run in string.uppercase:
         if not append:
             print 'Reading via http: ', runfile
             # using urllib2
-            result=opener.open("http://www.eso.org/observing/usg/status_pl/csv/" + runfile).readlines()
+            urlcsv="http://www.eso.org/observing/usg/status_pl/csv/" + runfile
+            print('Reading: ', urlcsv)
+            result=opener.open(urlcsv).readlines()
             print 'Read remote file into readline list: ', type(result), len(result)
             preamble=result[0]
             print 'preamble: ', len(preamble)
