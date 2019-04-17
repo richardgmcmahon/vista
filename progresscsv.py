@@ -87,10 +87,10 @@ def login():
 
     # Set request to login to the archive
     URLLOGIN="https://www.eso.org/sso/login"
-    dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
+    dd = {"service": "https://www.eso.org:443/UserPortal/security_check"}
     q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
-    response=urllib2.urlopen(q)
-    request=urllib2.Request(q)
+    response = urllib2.urlopen(q)
+    request = urllib2.Request(q)
 
     # Read cookies
     cj=cookielib.CookieJar()
@@ -132,9 +132,7 @@ def login():
         else:
             raise SystemExit('Error logging in')
 
-
-
-
+    return
 
 
 
