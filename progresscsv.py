@@ -14,7 +14,7 @@
  csv and FITs format file is also created by appending all the files.
 
  Appending the fits files is by reading back the appended csv file
- to get around fact that number of characters per column is 
+ to get around fact that number of characters per column is
  different in each file and the in memory version has fixed char
  width columns
 
@@ -23,16 +23,14 @@
  convert to astropy
  make it smart enough to iterate on the RUNS A. B etc
 
- 
 
-
- Useage:
+ Usage:
 
  python progresscsv.py
 
  Options:
 
- append: append exsiting files rather than downloading data
+ append: append existing files rather than downloading data
 
  You may need to customise some of the login and program information
 
@@ -42,6 +40,9 @@ http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv
 URL of form on 2014-06-30
 http://www.eso.org/observing/usg/status_pl/csv/179A2010A.csv?ticket=ST-411808-AnVQNiHsjj6k7MPlTZcs-sso
 
+
+Portal login: (2018-05-09)
+http://www.eso.org/UserPortal/authenticatedArea/welcome2.eso?ticket=ST-150755-lFrYLb2KUOHSx6rXf1P1-sso
 
 
 History:
@@ -131,7 +132,7 @@ def plot_radec(ra, dec, title=None, xlabel=None, ylabel=None,
 
   ndata=len(xdata)
   print 'Number of data points plotted: ', ndata
-  plt.legend(['n: '+ str(ndata)], 
+  plt.legend(['n: '+ str(ndata)],
    fontsize='small', loc='upper right', numpoints=1, scatterpoints=1)
 
   if showplots: plt.show()
@@ -174,7 +175,7 @@ def plot_raextime(xdata, ydata, title=None, xlabel=None, ylabel=None,
 
   ndata=len(xdata)
   print 'Number of data points plotted: ', ndata
-  plt.legend(['n: '+ str(ndata)], 
+  plt.legend(['n: '+ str(ndata)],
    fontsize='small', loc='upper right', numpoints=1, scatterpoints=1)
 
   if showplots: plt.show()
@@ -216,117 +217,127 @@ def _check_perms(fname):
                 raise IOError(err)
 
 
-if __name__ == '__main__':
+# the cfg file contains a password so it might be readonly
+configfile = 'progresscsv.cfg'
+security_check=_check_perms(configfile)
 
+print('Reading confifgile:', configfile)
+import ConfigParser
+config = ConfigParser.RawConfigParser()
+config.read(configfile)
+USERNAME=config.get('vhs', 'username')
+PASSWORD=config.get('vhs', 'password')
+PROGRAM=config.get('vhs', 'program')
+OUTPATH_ROOT=config.get('vhs', 'outpath')
 
-  # the cfg file contains a password so it might be readonly 
-  security_check=_check_perms('progresscsv.cfg')
+# could get from configfile or command line
+progid='179A2010'
 
-  import ConfigParser
-  config = ConfigParser.RawConfigParser()
-  config.read('progresscsv.cfg')
-  USERNAME=config.get('vhs', 'username')
-  PASSWORD=config.get('vhs', 'password')
-  PROGRAM=config.get('vhs', 'program')
-  OUTPATH_ROOT=config.get('vhs', 'outpath')
+# no changes should be needed below
+if not date: date = strftime("%Y%m%d", gmtime())
 
-  progid='179A2010'
+print 'OUTPATH_ROOT: ', OUTPATH_ROOT
+outpath= os.path.join(OUTPATH_ROOT, date)
+print 'outpath: ' + outpath
 
-  # no changes should be needed below
-  if not date: date = strftime("%Y%m%d", gmtime())
-
-  print 'OUTPATH_ROOT: ', OUTPATH_ROOT
-  outpath= os.path.join(OUTPATH_ROOT, date)
-  print 'outpath: ' + outpath
-
-  if not os.path.isdir(outpath):
+if not os.path.isdir(outpath):
     os.mkdir(outpath)
 
-  # make convenience link to current progress files
-  # os.symlink(src, dest)
-  # e.g ln -s /data/vhs/progress/20140727 /data/vhs/progress/current
-  src=outpath
-  print 'src:  ', src
-  dest=OUTPATH_ROOT + '/current'
-  print 'dest: ', dest
-  if os.path.exists(dest): 
-    if os.path.islink(dest):
-      os.unlink(dest)
+# make convenience link to current progress files
+# os.symlink(src, dest)
+# e.g ln -s /data/vhs/progress/20140727 /data/vhs/progress/current
+src=outpath
+print 'src:  ', src
+dest=OUTPATH_ROOT + '/current'
+print 'dest: ', dest
+if os.path.exists(dest):
+  if os.path.islink(dest):
+    os.unlink(dest)
 
-  os.symlink(src, dest)
+os.symlink(src, dest)
 
-  time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
+time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
 
-  # Set request to login to the archive
-  URLLOGIN="https://www.eso.org/sso/login"
-  dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
-  q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
+# Set request to login to the archive
+URLLOGIN="https://www.eso.org/sso/login"
+dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
+q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
 
-  if not append:
-    response=urllib2.urlopen(q)
-    request=urllib2.Request(q)
+print('append:', append)
 
-    # Read cookies
-    cj=cookielib.CookieJar()
-    cj.extract_cookies(response, request)
-    print 'ESO Cookie: ', [str(i) for i in cj]
+if not append:
+  response=urllib2.urlopen(q)
+  request=urllib2.Request(q)
 
-    for cookie in cj:
-      print('Cookie: %s --> %s'%(cookie.name,cookie.value))
+  # Read cookies
+  cj=cookielib.CookieJar()
+  cj.extract_cookies(response, request)
+  print 'ESO Cookie: ', [str(i) for i in cj]
+
+  for cookie in cj:
+    print('Cookie: %s --> %s'%(cookie.name,cookie.value))
 
 
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
+  opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
 
-    # Extract token
-    buffer = response.read()
-    token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
+  # Extract token
+  buffer = response.read()
+  print(buffer)
+  #token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
+  #print(token)
 
-    dd={'lt': token,
-      "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
-      "service": "https://www.eso.org:443/UserPortal/security_check"}
+  token = re.compile('<input type="hidden" name="execution" value="(\S+)" />').search(buffer).group(1)
 
-    dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
 
-    newd=[]
-    for k,v in dd.items():
+
+  dd={'lt': token,
+    "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
+    "service": "https://www.eso.org:443/UserPortal/security_check"}
+
+  dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
+
+  newd=[]
+  for k,v in dd.items():
 	newd.append((k,v))
 
-    # Send login request -- seems to fail the first time
-    try:
+  # Send login request -- seems to fail the first time
+  try:
 	res=opener.open(URLLOGIN, newd).read()
-    except:
+  except:
 	res=opener.open(URLLOGIN, newd).read()
-	
-    print res.find('Log In Successful')
-    if res.find('Log In Successful')>0:
+
+
+
+  print res.find('Log In Successful')
+  if res.find('Log In Successful')>0:
 	print 'ESO Portal Login Successful'
 
-    if res.find('Log In Successful')<0:
+  if res.find('Log In Successful')<0:
 	print 'ESO Portal Login Failed'
-	
 
-    #res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
 
-    # Check if that pages sees my credentials
-    #if res.find(USERNAME)>0:
-    #	print 'Ok seems to work'
+  #res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
 
-	
-  # copy and print the file
-  #print opener.open("http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv").read()
+  # Check if that pages sees my credentials
+  #if res.find(USERNAME)>0:
+  #	print 'Ok seems to work'
 
-  # Now loop throuh the csv files for each run
 
-  # filename for summary of all run files appended
-  # each observing period has a separate file of form '179A2010[A to Z].csv'
+# copy and print the file
+#print opener.open("http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv").read()
 
-  runfiles_all= progid +'.csv'
-  fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
+# Now loop throuh the csv files for each run
 
-  fitsfile_all= progid + '.fits'
+# filename for summary of all run files appended
+# each observing period has a separate file of form '179A2010[A to Z].csv'
 
-  # loop through A-Z via string.uppercase which contains [A-Z]
-  for run in string.uppercase:
+runfiles_all= progid +'.csv'
+fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
+
+fitsfile_all= progid + '.fits'
+
+# loop through A-Z via string.uppercase which contains [A-Z]
+for run in string.uppercase:
     runfile=progid+'%s.csv' % run
     fitsfile=progid+'%s.fits' % run
     print 'Reading: ',runfile
@@ -348,10 +359,10 @@ if __name__ == '__main__':
             print header
 
             #old URL
-            #result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()           
+            #result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()
             #print type(result), len(result)
         if pause: raw_input("Press ENTER to continue: ")
-                  
+
         if append:
             INFILE = os.path.join(outpath, runfile)
             print 'Append: Reading: ', INFILE
@@ -369,7 +380,7 @@ if __name__ == '__main__':
         if pause: raw_input("Press ENTER to continue: ")
             #info(result)
             #a=type(result)
-            #tmp=result.splitlines(True)                
+            #tmp=result.splitlines(True)
             #print 'Number of records read in: ',len(tmp)
             #tmp=string.join(tmp[1:])
             #print 'Number of records read in: ',len(tmp)
@@ -392,7 +403,7 @@ if __name__ == '__main__':
 	    #table = atpy.Table(result, type='ascii')
 	    data_start=2
 	    header_start=1
-	    table = Table.read(result, format='ascii', 
+	    table = Table.read(result, format='ascii',
 	     data_start=data_start, header_start=header_start)
 	    print table.colnames
 	    #table.describe()
@@ -415,7 +426,7 @@ if __name__ == '__main__':
 	    #tmp=string.join(summary)
 	    #fh.write(tmp)
 	    #fh.write(summary)
-        else:  
+        else:
             # Skip first line of column info that is in each file
             # locate the first end of line with .read is used
             # j = result.find('\n')
@@ -447,48 +458,41 @@ if __name__ == '__main__':
         print('Could be the end of the loop and runfile does not exist')
         break
 
-                
-  fh_csv_all.close()
-  runfiles_all= progid +'.csv'
 
-  # read result atpy table 
-  #atpy.Table(result, type='ascii')
-  #table_all = atpy.Table(summary, type='ascii')
-  #help(summary)
+fh_csv_all.close()
+runfiles_all= progid +'.csv'
 
-  table = Table.read(summary, format='ascii', 
-    data_start=data_start, header_start=header_start)
-  print table.colnames
+# read result atpy table
+#atpy.Table(result, type='ascii')
+#table_all = atpy.Table(summary, type='ascii')
+#help(summary)
 
-  ResultFile= os.path.join(outpath, fitsfile_all)
-  table.write(ResultFile, overwrite=True)
-  end = time.time()
-  elapsed = end - start
-  print "Summary file created: ", ResultFile
-  print "Time taken: ", elapsed, "seconds."
+table = Table.read(summary, format='ascii',
+  data_start=data_start, header_start=header_start)
+print table.colnames
+
+ResultFile= os.path.join(outpath, fitsfile_all)
+table.write(ResultFile, overwrite=True)
+end = time.time()
+elapsed = end - start
+print "Summary file created: ", ResultFile
+print "Time taken: ", elapsed, "seconds."
 
 
-  fitsfile=outpath + '/' + fitsfile_all
-  figfile=outpath + '/' + 'progress_radec.png'
-  print 'Reading: ', fitsfile
-  table.read(fitsfile)
-  print table.colnames
-  ra=table['RA (hrs)']
-  dec=table['DEC (deg)']
-  executionTime=table['Execution time (s)']
-  print 'Number of rows read in: ', len(ra)
-  plot_radec(ra, dec, title='VHS Progress: ' + fitsfile,
+fitsfile=outpath + '/' + fitsfile_all
+figfile=outpath + '/' + 'progress_radec.png'
+print 'Reading: ', fitsfile
+table.read(fitsfile)
+print table.colnames
+ra=table['RA (hrs)']
+dec=table['DEC (deg)']
+executionTime=table['Execution time (s)']
+print 'Number of rows read in: ', len(ra)
+plot_radec(ra, dec, title='VHS Progress: ' + fitsfile,
    figfile=figfile,
    rarange=[0.0, 24.0], decrange=[-90.0, 10.0])
 
-  figfile=outpath + '/' + 'progress_ra_executiontime.png'
-  plot_raextime(ra, executionTime, title='VHS Progress: ' + fitsfile,
+figfile=outpath + '/' + 'progress_ra_executiontime.png'
+plot_raextime(ra, executionTime, title='VHS Progress: ' + fitsfile,
    figfile=figfile,
    rarange=[0.0, 24.0])
-
-
-
-
-
-
-
