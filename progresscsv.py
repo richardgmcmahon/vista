@@ -56,6 +56,7 @@ History:
   20140725 - RGM: changed the ESO URL
   20140725 - RGM: added ability to skip the extra line at start added by ESO
   20140812 - RGM: commented out SSO check since URL not found and not needed anyway!
+  20190317 - DM : updated ESO login / authentication code
 
 """
 
@@ -258,64 +259,125 @@ os.symlink(src, dest)
 
 time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
 
-# Set request to login to the archive
-URLLOGIN="https://www.eso.org/sso/login"
-dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
-q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
-
-print('append:', append)
-
-if not append:
-  response=urllib2.urlopen(q)
-  request=urllib2.Request(q)
-
-  # Read cookies
-  cj=cookielib.CookieJar()
-  cj.extract_cookies(response, request)
-  print 'ESO Cookie: ', [str(i) for i in cj]
-
-  for cookie in cj:
-    print('Cookie: %s --> %s'%(cookie.name,cookie.value))
 
 
-  opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
+def login():
+  #updated login process (dmurphy, 17/4/19)
 
-  # Extract token
-  buffer = response.read()
-  print(buffer)
-  #token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
-  #print(token)
+  # Set request to login to the archive
+    URLLOGIN="https://www.eso.org/sso/login"
+    dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
+    q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
+    response=urllib2.urlopen(q)
+    request=urllib2.Request(q)
 
-  token = re.compile('<input type="hidden" name="execution" value="(\S+)" />').search(buffer).group(1)
+    # Read cookies
+    cj=cookielib.CookieJar()
+    cj.extract_cookies(response, request)
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+
+    # Extract token
+    buffer = response.read()
+    token = re.compile('<input type="hidden" name="execution" value="(\S+)"/>').search(buffer).group(1)
+
+    dd={'execution': token,
+        "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
+        "service": "https://www.eso.org:443/UserPortal/security_check"}
+
+    newd=[]
+    for k,v in dd.items():
+        newd.append((k,v))
+
+    # Send login request -- seems to fail the first time
+    #print newd
+    print urllib.urlencode(newd)
+    bugger = None
+    is404 = False
+    try:
+        res=opener.open(URLLOGIN, urllib.urlencode(newd)).read()
+    except Exception as bugger:
+        if not bugger.__dict__['code'] == 404:
+            raise SystemExit('Some kind of authentication issue with ESO')
+        else:
+            is404 = True
+            
+    if is404:
+        print 'Found a 404 - ESO should fix this (you should still be logged in, however)!'
+        return opener
+    else:
+        if res.find("""<a href="https://www.eso.org/UserPortal/authenticatedArea/logout.eso">Logout</a>""")>0:
+            print 'Log In Successful'
+            return opener 
+        else:
+            raise SystemExit('Error logging in')
 
 
 
-  dd={'lt': token,
-    "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
-    "service": "https://www.eso.org:443/UserPortal/security_check"}
 
-  dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
+if 1:
+  opener = login()
 
-  newd=[]
-  for k,v in dd.items():
-	newd.append((k,v))
+else:
+  #this is RGM's legacy login code - don't use this any more.
 
-  # Send login request -- seems to fail the first time
-  try:
-	res=opener.open(URLLOGIN, newd).read()
-  except:
-	res=opener.open(URLLOGIN, newd).read()
+  # Set request to login to the archive
+  URLLOGIN="https://www.eso.org/sso/login"
+  dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
+  q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
+
+  print('append:', append)
+
+  if not append:
+    response=urllib2.urlopen(q)
+    request=urllib2.Request(q)
+
+    # Read cookies
+    cj=cookielib.CookieJar()
+    cj.extract_cookies(response, request)
+    print 'ESO Cookie: ', [str(i) for i in cj]
+
+    for cookie in cj:
+      print('Cookie: %s --> %s'%(cookie.name,cookie.value))
+
+
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
+
+    # Extract token
+    buffer = response.read()
+    print(buffer)
+    #token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
+    #print(token)
+
+    token = re.compile('<input type="hidden" name="execution" value="(\S+)" />').search(buffer).group(1)
 
 
 
-  print res.find('Log In Successful')
-  if res.find('Log In Successful')>0:
-	print 'ESO Portal Login Successful'
+    dd={'lt': token,
+      "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
+      "service": "https://www.eso.org:443/UserPortal/security_check"}
 
-  if res.find('Log In Successful')<0:
-	print 'ESO Portal Login Failed'
+    dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
+
+    newd=[]
+    for k,v in dd.items():
+          newd.append((k,v))
+
+    # Send login request -- seems to fail the first time
+    try:
+          res=opener.open(URLLOGIN, newd).read()
+    except:
+          res=opener.open(URLLOGIN, newd).read()
 
 
+
+    print res.find('Log In Successful')
+    if res.find('Log In Successful')>0:
+          print 'ESO Portal Login Successful'
+
+    if res.find('Log In Successful')<0:
+          print 'ESO Portal Login Failed'
+
+#raise SystemExit(0)
   #res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
 
   # Check if that pages sees my credentials
@@ -457,7 +519,6 @@ for run in string.uppercase:
         print 'Problem reading: ',runfile
         print('Could be the end of the loop and runfile does not exist')
         break
-
 
 fh_csv_all.close()
 runfiles_all= progid +'.csv'
