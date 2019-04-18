@@ -60,8 +60,13 @@ History:
 
 """
 
+# Python 2.7/3 compatability
 from __future__ import print_function
-
+from six.moves import input
+try:
+    input = raw_input
+except NameError:
+    pass
 
 
 def _check_perms(fname):
@@ -70,30 +75,29 @@ def _check_perms(fname):
 
     """
     import stat
-    fname=os.path.expanduser(fname)
+    fname = os.path.expanduser(fname)
     with open(fname) as fobj:
             prop = os.fstat(fobj.fileno())
             if prop.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-                err=("file has incorrect mode.  On UNIX use\n"
-                     "    chmod go-rw %s" % fname)
+                err = ("file has incorrect mode.  On UNIX use\n"
+                       "    chmod go-rw %s" % fname)
                 raise IOError(err)
 
 
-
-
 def login():
+    """
     #updated login process (dmurphy, 17/4/19)
-
+    """
 
     # Set request to login to the archive
-    URLLOGIN="https://www.eso.org/sso/login"
+    URLLOGIN = "https://www.eso.org/sso/login"
     dd = {"service": "https://www.eso.org:443/UserPortal/security_check"}
     q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
     response = urllib2.urlopen(q)
     request = urllib2.Request(q)
 
     # Read cookies
-    cj=cookielib.CookieJar()
+    cj = cookielib.CookieJar()
     cj.extract_cookies(response, request)
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
 
@@ -101,21 +105,22 @@ def login():
     buffer = response.read()
     token = re.compile('<input type="hidden" name="execution" value="(\S+)"/>').search(buffer).group(1)
 
-    dd={'execution': token,
-        "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
-        "service": "https://www.eso.org:443/UserPortal/security_check"}
+    dd = {'execution': token,
+          "username": USERNAME, "password": PASSWORD,
+          "_eventId": "submit",
+          "service": "https://www.eso.org:443/UserPortal/security_check"}
 
-    newd=[]
-    for k,v in dd.items():
-        newd.append((k,v))
+    newd = []
+    for k, v in dd.items():
+        newd.append((k, v))
 
     # Send login request -- seems to fail the first time
-    #print newd
+    # print newd
     print(urllib.urlencode(newd))
     bugger = None
     is404 = False
     try:
-        res=opener.open(URLLOGIN, urllib.urlencode(newd)).read()
+        res = opener.open(URLLOGIN, urllib.urlencode(newd)).read()
     except Exception as bugger:
         if not bugger.__dict__['code'] == 404:
             raise SystemExit('Some kind of authentication issue with ESO')
@@ -126,7 +131,7 @@ def login():
         print('Found a 404 - ESO should fix this (you should still be logged in, however)!')
         return opener
     else:
-        if res.find("""<a href="https://www.eso.org/UserPortal/authenticatedArea/logout.eso">Logout</a>""")>0:
+        if res.find("""<a href="https://www.eso.org/UserPortal/authenticatedArea/logout.eso">Logout</a>""") > 0:
             print('Log In Successful')
             return opener
         else:
@@ -135,51 +140,137 @@ def login():
     return
 
 
+def login_rgm():
+    """
+    deprecated 'rgm' version
 
-def plot_radec(ra, dec, title=None, xlabel=None, ylabel=None,
-    rarange=None, decrange=None, showplots=False, figfile=None):
+    this is RGM's legacy login code - don't use this any more.
+
+    """
+
+    # Set request to login to the archive
+    URLLOGIN = "https://www.eso.org/sso/login"
+    dd = {"service": "https://www.eso.org:443/UserPortal/security_check"}
+    q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
+
+    print('append:', append)
+
+    if not append:
+        response = urllib2.urlopen(q)
+        request = urllib2.Request(q)
+
+        # Read cookies
+        cj = cookielib.CookieJar()
+        cj.extract_cookies(response, request)
+        print('ESO Cookie:', [str(i) for i in cj])
+
+        for cookie in cj:
+            print('Cookie: %s --> %s' % (cookie.name, cookie.value))
+
+        opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
+
+        # Extract token
+        buffer = response.read()
+        print(buffer)
+        # token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
+        # print(token)
+
+        token = re.compile('<input type="hidden" name="execution" value="(\S+)" />').search(buffer).group(1)
+
+        dd = {'lt': token,
+              "username": USERNAME, "password": PASSWORD,
+              "_eventId": "submit",
+              "service": "https://www.eso.org:443/UserPortal/security_check"}
+
+        dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
+
+        newd = []
+        for k, v in dd.items():
+            newd.append((k, v))
+
+        # Send login request -- seems to fail the first time
+        try:
+            res = opener.open(URLLOGIN, newd).read()
+        except:
+            res = opener.open(URLLOGIN, newd).read()
+
+        print(res.find('Log In Successful'))
+        if res.find('Log In Successful') > 0:
+            print('ESO Portal Login Successful')
+
+        if res.find('Log In Successful') < 0:
+            print('ESO Portal Login Failed')
+
+    # raise SystemExit(0)
+    # res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
+
+    # Check if that pages sees my credentials
+    # if res.find(USERNAME)>0:
+    #     print 'Ok seems to work'
+
+    # raise SystemExit(0)
+    # res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
+
+    # Check if that pages sees my credentials
+    # if res.find(USERNAME)>0:
+    #     print 'Ok seems to work'
+
+    # copy and print the file
+    # print opener.open("http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv").read()
+
+    return
+
+
+def plot_radec(ra, dec,
+               title=None, xlabel=None, ylabel=None,
+               rarange=None, decrange=None,
+               showplots=False, figfile=None):
     """
 
     """
 
     import matplotlib.pyplot as plt
-    #plt.setp(lines, edgecolors='None')
 
-    if figfile == None: figfile='radec.png'
+    # plt.setp(lines, edgecolors='None')
+    if figfile is None:
+        figfile = 'radec.png'
 
     plt.figure(num=None, figsize=(9.0, 6.0))
 
     plt.xlabel('RA')
-    if xlabel != None: plt.xlabel(xlabel)
+    if xlabel is not None:
+        plt.xlabel(xlabel)
     plt.ylabel('Dec')
-    if ylabel != None: plt.ylabel(ylabel)
-    if title != None: plt.title(title)
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    if title is not None:
+        plt.title(title)
 
-    ms=1.0
+    ms = 1.0
 
-    xdata=ra
-    ydata=dec
-
+    xdata = ra
+    ydata = dec
 
     print(min(xdata), max(xdata))
     print(min(ydata), max(ydata))
 
-    #plt.xlim([0,360])
-    #plt.ylim([-90,30])
+    # plt.xlim([0,360])
+    # plt.ylim([-90,30])
 
-    ms=1.0
+    ms = 1.0
     plt.plot(xdata, ydata, 'og', markeredgecolor='b', ms=ms)
-    #plotid.plotid()
+    # plotid.plotid()
 
-    if rarange != None:
+    if rarange is not None:
         plt.xlim(rarange)
-    if decrange!= None:
+    if decrange is not None:
         plt.ylim(decrange)
 
-    ndata=len(xdata)
+    ndata = len(xdata)
     print('Number of data points plotted:', ndata)
-    plt.legend(['n: '+ str(ndata)],
-               fontsize='small', loc='upper right',
+    plt.legend(['n: ' + str(ndata)],
+               fontsize='small',
+               loc='upper right',
                numpoints=1, scatterpoints=1)
 
     if showplots:
@@ -189,10 +280,8 @@ def plot_radec(ra, dec, title=None, xlabel=None, ylabel=None,
     plt.savefig(figfile)
 
 
-
-
-
-def plot_raextime(xdata, ydata, title=None, xlabel=None, ylabel=None,
+def plot_raextime(xdata, ydata,
+                  title=None, xlabel=None, ylabel=None,
                   rarange=None, decrange=None,
                   showplots=False, figfile=None):
     """
@@ -200,36 +289,42 @@ def plot_raextime(xdata, ydata, title=None, xlabel=None, ylabel=None,
     """
 
     import matplotlib.pyplot as plt
-    #plt.setp(lines, edgecolors='None')
+    # plt.setp(lines, edgecolors='None')
 
-    if figfile == None: figfile='raextime.png'
+    if figfile is None:
+        figfile = 'raextime.png'
 
     plt.figure(num=None, figsize=(9.0, 6.0))
 
     plt.xlabel('RA')
-    if xlabel != None: plt.xlabel(xlabel)
+    if xlabel is not None:
+        plt.xlabel(xlabel)
     plt.ylabel('Execution Time(s)')
-    if ylabel != None: plt.ylabel(ylabel)
-    if title != None: plt.title(title)
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    if title is not None:
+        plt.title(title)
 
-    ms=1.0
+    ms = 1.0
 
     print(min(xdata), max(xdata))
     print(min(ydata), max(ydata))
 
-    #plt.xlim([0,360])
-    #plt.ylim([-90,30])
+    # plt.xlim([0,360])
+    # plt.ylim([-90,30])
 
-    ms=1.0
+    ms = 1.0
     plt.plot(xdata, ydata, 'og', markeredgecolor='b', ms=ms)
-    #plotid.plotid()
+    # plotid.plotid()
 
-    if rarange != None: plt.xlim(rarange)
-    if decrange!= None: plt.ylim(decrange)
+    if rarange is not None:
+        plt.xlim(rarange)
+    if decrange is not None:
+        plt.ylim(decrange)
 
-    ndata=len(xdata)
+    ndata = len(xdata)
     print('Number of data points plotted:', ndata)
-    plt.legend(['n: '+ str(ndata)],
+    plt.legend(['n: ' + str(ndata)],
                fontsize='small', loc='upper right',
                numpoints=1, scatterpoints=1)
 
@@ -240,86 +335,171 @@ def plot_raextime(xdata, ydata, title=None, xlabel=None, ylabel=None,
     plt.savefig(figfile)
 
 
+def getargs(verbose=False):
+    """
 
-if __name__=='__main__':
+    Template getargs function
+
+    Usage
+
+    python getargs.py --help
 
 
-    import os, sys
-    import re, string
+    def getargs():
+
+    ....
+
+    if __name__=='__main__':
+
+        args = getargs()
+        debug = args.debug()
+
+
+
+    parse command line arguements
+
+    not all args are active
+
+    """
+    import sys
+    import pprint
+    import argparse
+
+    # there is probably a version function out there
+    __version__ = '0.1'
+
+    description = 'This is a template using getargs'
+    epilog = """WARNING: Not all options may be supported\n"""
+
+    parser = argparse.ArgumentParser(
+        description=description, epilog=epilog,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    # the destination defaults to the option parameter
+    # defaul=False might not be needed
+
+    # default type is string
+    parser.add_argument("--string",
+                        help="string input")
+
+    parser.add_argument("--float", type=float,
+                        help="float input")
+
+    parser.add_argument("--infile",
+                        help="Input file name")
+
+    parser.add_argument("--configfile",
+                        default=None,
+                        help="configuration file")
+
+    parser.add_argument("--debug",
+                        action='store_true',
+                        help="debug option")
+
+    parser.add_argument("--pause",
+                        action='store_true',
+                        help="pause option")
+
+    parser.add_argument("--verbose", default=verbose,
+                        action='store_true',
+                        help="verbose option")
+
+    parser.add_argument("--version", action='store_true',
+                        help="verbose option")
+
+    args = parser.parse_args()
+
+    if args.debug or args.verbose:
+        print()
+        print('Number of arguments:', len(sys.argv),
+              'arguments: ', sys.argv[0])
+
+    if args.debug or args.verbose:
+        print()
+        for arg in vars(args):
+            print(arg, getattr(args, arg))
+
+    if args.debug or args.verbose:
+        print()
+        pprint.pprint(args)
+
+    if args.version:
+        print('version:', __version__)
+        sys.exit(0)
+
+    return args
+
+
+if __name__ == '__main__':
+
+    import os
+    import sys
+    import re
+    import string
     import traceback
     import time
     from time import strftime, gmtime
     from optparse import OptionParser
 
+    import ConfigParser
 
-
-    import urllib, urllib2, cookielib
+    import urllib
+    import urllib2
+    import cookielib
 
     import numpy as np
 
-    #from MultipartPostHandler import MultipartPostHandler
-    import MultipartPostHandler
+    # use of MultipartPostHandler deprecated by DM in April 2019
+    # from MultipartPostHandler import MultipartPostHandler
+    # import MultipartPostHandler
     # if debug:
-    print('MultipartPostHandler.__file__:',
-          MultipartPostHandler.__file__)
+    # print('MultipartPostHandler.__file__:',
+    #      MultipartPostHandler.__file__)
 
-    #import atpy
     import astropy
     print('astropy.__version__:', astropy.__version__)
     from astropy.table import Table, vstack
 
-    #try:
-    #  import pyfits
-    #  print 'pyfits.__version__: ', pyfits.__version__
-    #except ImportError:
-    #  print "ImportError: pyfits not available"
+    debug = True
 
+    verbose = True
+    pause = False
+    table = True
+    append = False
+    date = False
 
-    debug=True
-
-    verbose=1
-    pause=0
-    table=1
-    append=0
-    date=0
+    args = getargs(verbose=True)
+    debug = args.debug
+    pause = args.pause
 
     # concatenate existing files by date
-    #append=1
-    #date='20120328'
-    #date='20120401'
-
-
-    # rgm started to add some options
-    parser = OptionParser()
-    parser.add_option("-v", "--verbose", dest="verbose",
-                      help="verbose option", default=None)
-    (options, args) = parser.parse_args()
+    # append=1
+    # date='20120328'
+    # date='20120401'
 
     start = time.time()
 
-
-
     # the cfg file contains a password so it might be readonly
     configfile = 'progresscsv.cfg'
-    security_check=_check_perms(configfile)
+    security_check = _check_perms(configfile)
 
     print('Reading confifgile:', configfile)
-    import ConfigParser
     config = ConfigParser.RawConfigParser()
     config.read(configfile)
-    USERNAME=config.get('vhs', 'username')
-    PASSWORD=config.get('vhs', 'password')
-    PROGRAM=config.get('vhs', 'program')
-    OUTPATH_ROOT=config.get('vhs', 'outpath')
+    USERNAME = config.get('vhs', 'username')
+    PASSWORD = config.get('vhs', 'password')
+    PROGRAM = config.get('vhs', 'program')
+    OUTPATH_ROOT = config.get('vhs', 'outpath')
 
     # could get from configfile or command line
-    progid='179A2010'
+    progid = PROGRAM
 
     # no changes should be needed below
-    if not date: date = strftime("%Y%m%d", gmtime())
+    if not date:
+        date = strftime("%Y%m%d", gmtime())
 
     print('OUTPATH_ROOT:', OUTPATH_ROOT)
-    outpath= os.path.join(OUTPATH_ROOT, date)
+    outpath = os.path.join(OUTPATH_ROOT, date)
     print('outpath:' + outpath)
 
     if not os.path.isdir(outpath):
@@ -330,105 +510,34 @@ if __name__=='__main__':
     # e.g ln -s /data/vhs/progress/20140727 /data/vhs/progress/current
     src = outpath
     print('src:', src)
-    dest=OUTPATH_ROOT + '/current'
+    dest = OUTPATH_ROOT + '/current'
     print('dest:', dest)
     if os.path.exists(dest):
         if os.path.islink(dest):
             os.unlink(dest)
-
     os.symlink(src, dest)
 
     time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
 
-
     if 1:
-      opener = login()
+        opener = login()
 
     else:
-      #this is RGM's legacy login code - don't use this any more.
-
-      # Set request to login to the archive
-      URLLOGIN="https://www.eso.org/sso/login"
-      dd={"service": "https://www.eso.org:443/UserPortal/security_check"}
-      q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
-
-      print('append:', append)
-
-      if not append:
-        response=urllib2.urlopen(q)
-        request=urllib2.Request(q)
-
-        # Read cookies
-        cj=cookielib.CookieJar()
-        cj.extract_cookies(response, request)
-        print('ESO Cookie: ', [str(i) for i in cj])
-
-        for cookie in cj:
-            print('Cookie: %s --> %s'%(cookie.name,cookie.value))
-
-
-        opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), MultipartPostHandler.MultipartPostHandler())
-
-        # Extract token
-        buffer = response.read()
-        print(buffer)
-        #token = re.compile('<input type="hidden" name="lt" value="(\S+)" />').search(buffer).group(1)
-        #print(token)
-
-        token = re.compile('<input type="hidden" name="execution" value="(\S+)" />').search(buffer).group(1)
-
-
-
-        dd={'lt': token,
-          "username": USERNAME, "password": PASSWORD, "_eventId": "submit",
-          "service": "https://www.eso.org:443/UserPortal/security_check"}
-
-        dd['service'] = "https%3A%2F%2Fwww.eso.org%3A443%2FUserPortal%2Fsecurity_check"
-
-        newd=[]
-        for k,v in dd.items():
-              newd.append((k,v))
-
-        # Send login request -- seems to fail the first time
-        try:
-              res=opener.open(URLLOGIN, newd).read()
-        except:
-              res=opener.open(URLLOGIN, newd).read()
-
-
-
-        print(res.find('Log In Successful'))
-        if res.find('Log In Successful')>0:
-              print('ESO Portal Login Successful')
-
-        if res.find('Log In Successful')<0:
-              print('ESO Portal Login Failed')
-
-    #raise SystemExit(0)
-      #res = opener.open('http://www.eso.org/observing/usg/UserPortal/apps/UserRuns_basic_UP.php', [("ticket", "ST-478282-uoZnIy5AXuGcnKGA7u1e-sso")]).read()
-
-      # Check if that pages sees my credentials
-      #if res.find(USERNAME)>0:
-      #	print 'Ok seems to work'
-
-
-    # copy and print the file
-    #print opener.open("http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv").read()
+        opener = login_rgm()
 
     # Now loop throuh the csv files for each run
 
     # filename for summary of all run files appended
     # each observing period has a separate file of form '179A2010[A to Z].csv'
-
-    runfiles_all= progid +'.csv'
+    runfiles_all = progid + '.csv'
     fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
 
-    fitsfile_all= progid + '.fits'
+    fitsfile_all = progid + '.fits'
 
     # loop through A-Z via string.uppercase which contains [A-Z]
     for run in string.uppercase:
-        runfile=progid+'%s.csv' % run
-        fitsfile=progid+'%s.fits' % run
+        runfile = progid + '%s.csv' % run
+        fitsfile = progid + '%s.fits' % run
         print('Reading:', runfile)
 
         # try until ends the end of the run sequence
@@ -436,7 +545,8 @@ if __name__=='__main__':
             if not append:
                 print('Reading via http:', runfile)
                 # using urllib2
-                urlcsv="http://www.eso.org/observing/usg/status_pl/csv/" + runfile
+                urlcsv = "http://www.eso.org/observing/usg/status_pl/csv/" \
+                         + runfile
                 print('Reading: ', urlcsv)
                 result = opener.open(urlcsv).readlines()
                 print('Read remote file into readline list:',
@@ -444,14 +554,15 @@ if __name__=='__main__':
                 preamble = result[0]
                 print('preamble:', len(preamble))
                 print(preamble)
-                header=result[1]
+                header = result[1]
                 print('header:', len(header))
                 print(header)
 
-                #old URL
-                #result=opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()
-                #print type(result), len(result)
-            if pause: raw_input("Press ENTER to continue: ")
+                # old URL
+                # result = opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()
+                print(type(result), len(result))
+            if pause:
+                raw_input("Press ENTER to continue: ")
 
             if append:
                 INFILE = os.path.join(outpath, runfile)
@@ -465,20 +576,11 @@ if __name__=='__main__':
                 print(len(result), type(result))
                 if pause:
                     raw_input("Press ENTER to continue: ")
-                #result=atpy.Table(INFILECSV, type='ascii')
-                #result.describe()
 
             print('Number of records read in:', len(result))
 
             if pause:
                 raw_input("Press ENTER to continue: ")
-                #info(result)
-                #a=type(result)
-                #tmp=result.splitlines(True)
-                #print 'Number of records read in: ',len(tmp)
-                #tmp=string.join(tmp[1:])
-                #print 'Number of records read in: ',len(tmp)
-                #raw_input("Press ENTER to continue: ")
 
             if not append:
                 ResultFile = os.path.join(outpath, runfile)
@@ -492,19 +594,19 @@ if __name__=='__main__':
 
             # read result atpy table
             if table:
-                # result is the ascii csv in memory '
+                # result is the ascii csv in memory
                 print('Read csv into table')
-                #table = atpy.Table(result, type='ascii')
-                data_start=2
-                header_start=1
+                data_start = 2
+                header_start = 1
                 table = Table.read(result, format='ascii',
-                 data_start=data_start, header_start=header_start)
+                                   data_start=data_start,
+                                   header_start=header_start)
                 print(table.colnames)
-                #table.describe()
                 print('Number of rows:', len(table))
-                #help(table)
-                #print table.shape
-                fitsfile= os.path.join(outpath, fitsfile)
+                if debug:
+                    print('table.describe:', table.describe)
+                    print('table.shape:', table.shape)
+                fitsfile = os.path.join(outpath, fitsfile)
                 print('Writing FITs file:', fitsfile)
                 table.write(fitsfile, overwrite=True)
                 print('Close FITs file:', fitsfile)
@@ -513,30 +615,23 @@ if __name__=='__main__':
             # opened file; ascii data is also appended in memory
 
             print('Run:', run)
-            if run=='A':
-                summary=result
-                #help(summary)
+            if run == 'A':
+                summary = result
                 print('Number of rows:', len(result))
-                #tmp=string.join(summary)
-                #fh.write(tmp)
-                #fh.write(summary)
             else:
                 # Skip first line of column info that is in each file
                 # locate the first end of line with .read is used
                 # j = result.find('\n')
                 # fh.write(result[j+1:])
-                nskip=2
+                nskip = 2
                 print('Number of rows in previous summary:', len(summary))
-                #help(summary)
                 print('Number of rows to be appended:', len(result) - nskip)
-                #help(result)
                 print('Writing appended csv file:', runfiles_all)
 
                 tmp = summary + result[nskip:]
                 summary = tmp
                 new = string.join(tmp)
                 print('Number of rows:', len(new))
-                #fh.write(result[1:])
                 fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
                 fh_csv_all.write(new)
                 print('Write summary completed:', len(new))
@@ -554,25 +649,19 @@ if __name__=='__main__':
             break
 
     fh_csv_all.close()
-    runfiles_all = progid +'.csv'
-
-    # read result atpy table
-    #atpy.Table(result, type='ascii')
-    #table_all = atpy.Table(summary, type='ascii')
-    #help(summary)
+    runfiles_all = progid + '.csv'
 
     table = Table.read(summary, format='ascii',
                        data_start=data_start,
                        header_start=header_start)
     print(table.colnames)
 
-    ResultFile= os.path.join(outpath, fitsfile_all)
+    ResultFile = os.path.join(outpath, fitsfile_all)
     table.write(ResultFile, overwrite=True)
     end = time.time()
     elapsed = end - start
     print("Summary file created:", ResultFile)
     print("Time taken:", elapsed, "seconds")
-
 
     fitsfile = outpath + '/' + fitsfile_all
     figfile = outpath + '/' + 'progress_radec.png'
