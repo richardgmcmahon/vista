@@ -558,6 +558,34 @@ def getconfig(configfile=None, debug=False, silent=False):
 
     return config
 
+def table_unique_info(table):
+    """
+
+    """
+    for colname in table.columns:
+        unique_data = np.unique(table[colname])
+        for id in unique_data:
+            itest = (table[colname] == id)
+        print(id, ':', len(data[itest]))
+
+
+def tablecol_unique_info(table=None, colname=None, counts=True):
+    """
+
+    """
+    data = table[colname]
+    unique_data = np.unique(data)
+    print('colume name:', colname)
+    print('Number of unique rows:', len(unique_data))
+    if counts:
+        for id in unique_data:
+            itest = (data == id)
+            print(id, ':', len(data[itest]))
+    print()
+
+    return
+
+
 
 if __name__ == '__main__':
 
@@ -581,6 +609,10 @@ if __name__ == '__main__':
     # if debug:
     # print('MultipartPostHandler.__file__:',
     #      MultipartPostHandler.__file__)
+
+    import matplotlib
+    # set the backend before importing pyplot to avoid DISPLAY problems
+    matplotlib.use('Agg')
 
     import astropy
     print('astropy.__version__:', astropy.__version__)
@@ -790,15 +822,20 @@ if __name__ == '__main__':
             print("Unexpected error:", sys.exc_info())
             print('Problem reading:', runfile)
             print('Could be the end of the loop and runfile does not exist')
+            print()
+            print()
             break
 
     fh_csv_all.close()
     runfiles_all = progid + '.csv'
 
+    print('type(summary):', type(summary), len(summary))
+    # internal memory read of the summary data in ascii format
     table = Table.read(summary, format='ascii',
                        data_start=data_start,
                        header_start=header_start)
     print(table.colnames)
+    print()
 
     ResultFile = os.path.join(outpath, fitsfile_all)
     table.write(ResultFile, overwrite=True)
@@ -806,16 +843,65 @@ if __name__ == '__main__':
     elapsed = end - start
     print("Summary file created:", ResultFile)
     print("Time taken:", elapsed, "seconds")
+    print()
 
     fitsfile = outpath + '/' + fitsfile_all
     figfile = outpath + '/' + 'progress_radec.png'
     print('Reading:', fitsfile)
     table.read(fitsfile)
     print(table.colnames)
+    print('Number of rows read in:', len(table))
+    table.info()
+    table.info('stats')
+    print()
+
+
+    colname='run ID'
+    tablecol_unique_info(table, colname)
+
+    colname='OB ID'
+    tablecol_unique_info(table, colname, counts=False)
+
+    colname='OB status'
+    tablecol_unique_info(table, colname)
+
+    colname='Status date'
+    tablecol_unique_info(table, colname, counts=False)
+
+    colname='OB name'
+    tablecol_unique_info(table, colname, counts=False)
+
+    colname='OD name'
+    tablecol_unique_info(table, colname, counts=True)
+
+    colname = 'Execution time (s)'
+    tablecol_unique_info(table, colname)
+
+    colname = 'Container type'
+    tablecol_unique_info(table, colname)
+
+    colname = 'Container ID'
+    tablecol_unique_info(table, colname, counts=False)
+
+    colname = 'Seeing'
+    tablecol_unique_info(table, colname, counts=True)
+
+    colname = 'Sky transparency'
+    tablecol_unique_info(table, colname, counts=True)
+
+    colname = 'FLI'
+    tablecol_unique_info(table, colname, counts=True)
+
+    end = time.time()
+    elapsed = end - start
+    print("Elapsed time:", elapsed, "seconds")
+    print()
+
     ra = table['RA (hrs)']
     dec = table['DEC (deg)']
     executionTime = table['Execution time (s)']
-    print('Number of rows read in:', len(ra))
+    print()
+
     plot_radec(ra, dec, title='VHS Progress: ' + fitsfile,
                figfile=figfile,
                rarange=[0.0, 24.0],
@@ -826,3 +912,9 @@ if __name__ == '__main__':
                   title='VHS Progress: ' + fitsfile,
                   figfile=figfile,
                   rarange=[0.0, 24.0])
+
+
+    end = time.time()
+    elapsed = end - start
+    print("Elapsed time:", elapsed, "seconds")
+    print()
