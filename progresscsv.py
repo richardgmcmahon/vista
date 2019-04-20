@@ -16,7 +16,7 @@
  Appending the fits files is by reading back the appended csv file
  to get around fact that number of characters per column is
  different in each file and the in memory version has fixed char
- width columns
+ width columns.
 
 
  TODO:
@@ -84,26 +84,64 @@ def _check_perms(fname):
                 raise IOError(err)
 
 
-def login():
+def login(verbose=False, debug=False, pause=False):
     """
     #updated login process (dmurphy, 17/4/19)
+
+    uses urllib2
+
+    From: https://docs.python.org/2/library/urllib2.html
+
+    The urllib2 module defines functions and classes which help in opening
+    URLs (mostly HTTP) in a complex world - basic and digest authentication,
+    redirections, cookies and more.
+
+
+    Note
+    The urllib2 module has been split across several modules in Python 3 named
+    urllib.request and urllib.error. The 2to3 tool will automatically adapt
+    imports when converting your sources to Python 3.
+
     """
 
+    import urllib
+    import urllib2
+    import cookielib
+
     # Set request to login to the archive
+    # Convert a mapping object or a sequence of two-element tuples to
+    # a "percent-encoded" string, suitable to pass to urlopen()
     URLLOGIN = "https://www.eso.org/sso/login"
     dd = {"service": "https://www.eso.org:443/UserPortal/security_check"}
     q = "%s?%s" % (URLLOGIN, urllib.urlencode(dd))
+    if verbose or debug:
+        print('urllib q:', q)
+    if debug and pause:
+        raw_input("Press ENTER to continue: ")
+
     response = urllib2.urlopen(q)
     request = urllib2.Request(q)
 
     # Read cookies
     cj = cookielib.CookieJar()
     cj.extract_cookies(response, request)
+
+    if debug:
+        print('cookie:', cj)
+    if debug and pause:
+        raw_input("Press ENTER to continue: ")
+
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
 
     # Extract token
     buffer = response.read()
     token = re.compile('<input type="hidden" name="execution" value="(\S+)"/>').search(buffer).group(1)
+
+    if debug:
+        print('cookie token:', token)
+    if debug and pause:
+        raw_input("Press ENTER to continue: ")
+
 
     dd = {'execution': token,
           "username": USERNAME, "password": PASSWORD,
@@ -116,7 +154,7 @@ def login():
 
     # Send login request -- seems to fail the first time
     # print newd
-    print(urllib.urlencode(newd))
+    # print(urllib.urlencode(newd))
     bugger = None
     is404 = False
     try:
@@ -147,6 +185,10 @@ def login_rgm():
     this is RGM's legacy login code - don't use this any more.
 
     """
+
+    import urllib
+    import urllib2
+    import cookielib
 
     # Set request to login to the archive
     URLLOGIN = "https://www.eso.org/sso/login"
@@ -219,6 +261,7 @@ def login_rgm():
     # print opener.open("http://www.eso.org/observing/usg/status_pl/run/179A2010C.csv").read()
 
     return
+
 
 
 def plot_radec(ra, dec,
@@ -418,16 +461,102 @@ def getargs(verbose=False):
         print()
         for arg in vars(args):
             print(arg, getattr(args, arg))
+        print()
 
     if args.debug or args.verbose:
         print()
         pprint.pprint(args)
+        print()
 
     if args.version:
         print('version:', __version__)
         sys.exit(0)
 
     return args
+
+
+def getconfig(configfile=None, debug=False, silent=False):
+    """
+    read config file
+
+    Note the Python 2 ConfigParser module has been renamed to configparser
+    in Python 3 so it better to use import configparser in Python 2 for
+    future proofing
+
+    see also getconfig.cfg
+
+    TODO: catch exceptions
+
+    Support for lists:
+
+    see:
+
+    https://stackoverflow.com/questions/335695/lists-in-configparser
+
+    https://github.com/cacois/python-configparser-examples
+
+    look in cwd, home and home/.config
+
+    home/.config not implemented yet
+
+
+    """
+    import os
+    import configparser
+
+    # read the configuration file
+    # config = configparser.RawConfigParser()
+    config = configparser.SafeConfigParser()
+
+    print('__file__', __file__)
+    if configfile is None:
+        if debug:
+            print('__file__', __file__)
+        configfile_default = os.path.splitext(__file__)[0] + '.cfg'
+    if configfile is not None:
+        configfile_default = configfile
+
+    print('Open configfile:', configfile)
+    if debug:
+        print('Open configfile:', configfile)
+
+    try:
+        if not silent:
+            print('Reading config file', configfile)
+
+        try:
+            config.read(configfile)
+        except IOError:
+            print('config file', configfile, "does not exist")
+            configfile = os.path.join(os.environ["HOME"], configfile)
+            print('trying ', configfile)
+            config.read(configfile)
+
+    except Exception as e:
+        print('Problem reading config file: ', configfile)
+        print(e)
+
+    if debug:
+        print('configfile:', configfile)
+        print('sections:', config.sections())
+        for section_name in config.sections():
+            print('Section:', section_name)
+            print('Options:', config.options(section_name))
+            for name, value in config.items(section_name):
+                print('  %s = %s' % (name, value))
+        print()
+
+
+        for section_name in config.sections():
+            print()
+            print('Section:', section_name)
+            for name, value in config.items(section_name):
+                print('  %s = %s' % (name, value))
+                print(section_name, ':',
+                      name, config.get(section_name, name))
+        print()
+
+    return config
 
 
 if __name__ == '__main__':
@@ -443,9 +572,6 @@ if __name__ == '__main__':
 
     import ConfigParser
 
-    import urllib
-    import urllib2
-    import cookielib
 
     import numpy as np
 
@@ -460,17 +586,16 @@ if __name__ == '__main__':
     print('astropy.__version__:', astropy.__version__)
     from astropy.table import Table, vstack
 
-    debug = True
-
-    verbose = True
-    pause = False
     table = True
     append = False
     date = False
 
-    args = getargs(verbose=True)
+    # getargs overrides configfile values
+    args = getargs(verbose=False)
+    configfile = args.configfile
     debug = args.debug
     pause = args.pause
+    verbose = args.verbose
 
     # concatenate existing files by date
     # append=1
@@ -479,18 +604,16 @@ if __name__ == '__main__':
 
     start = time.time()
 
-    # the cfg file contains a password so it might be readonly
+    # the cfg file contains a password so it must be readonly
     configfile = 'progresscsv.cfg'
     security_check = _check_perms(configfile)
 
-    print('Reading confifgile:', configfile)
-    config = ConfigParser.RawConfigParser()
-    config.read(configfile)
+    config = getconfig(configfile=configfile, debug=True)
+
     USERNAME = config.get('vhs', 'username')
     PASSWORD = config.get('vhs', 'password')
     PROGRAM = config.get('vhs', 'program')
     OUTPATH_ROOT = config.get('vhs', 'outpath')
-
     # could get from configfile or command line
     progid = PROGRAM
 
@@ -519,19 +642,16 @@ if __name__ == '__main__':
 
     time_str = strftime("%Y-%m-%dT%H-%M-%S", gmtime())
 
-    if 1:
-        opener = login()
+    # authenticate to ESO portal
+    opener = login(verbose=verbose, debug=debug, pause=pause)
 
-    else:
-        opener = login_rgm()
-
-    # Now loop throuh the csv files for each run
+    # Now loop through the csv files for each run
 
     # filename for summary of all run files appended
     # each observing period has a separate file of form '179A2010[A to Z].csv'
     runfiles_all = progid + '.csv'
-    fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
-
+    outfile_csv_all = os.path.join(outpath, runfiles_all)
+    fh_csv_all = open(outfile_csv_all, 'w')
     fitsfile_all = progid + '.fits'
 
     # loop through A-Z via string.uppercase which contains [A-Z]
@@ -543,20 +663,42 @@ if __name__ == '__main__':
         # try until ends the end of the run sequence
         try:
             if not append:
-                print('Reading via http:', runfile)
+                # print('Reading via http:', runfile)
                 # using urllib2
                 urlcsv = "http://www.eso.org/observing/usg/status_pl/csv/" \
                          + runfile
                 print('Reading: ', urlcsv)
+
+                # URL = "http://www.hole.fi/jajvirta/weblog/"
+                # req = urllib2.Request(URL)
+                # url_handle = urllib2.urlopen(req)
+                # headers = url_handle.info()
+                # etag = headers.getheader("ETag")
+                #last_modified = headers.getheader("Last-Modified")
+                httpheader = opener.open(urlcsv).info()
+                if debug or verbose:
+                    # help(opener)
+                    print('http header:', len(httpheader))
+                    print(httpheader)
+                    Etag = httpheader.getheader("ETag")
+                    print('Etag:', Etag)
+                    print()
+
+                last_modified = httpheader.getheader("Last-Modified")
+                print("Last-Modified:", last_modified,
+                      httpheader.getheader("ETag"))
+
                 result = opener.open(urlcsv).readlines()
                 print('Read remote file into readline list:',
                       type(result), len(result))
-                preamble = result[0]
-                print('preamble:', len(preamble))
-                print(preamble)
-                header = result[1]
-                print('header:', len(header))
-                print(header)
+                if debug or verbose:
+                    preamble = result[0]
+                    print('preamble:', len(preamble))
+                    print(preamble)
+
+                    header = result[1]
+                    print('header:', len(header))
+                    print(header)
 
                 # old URL
                 # result = opener.open("http://www.eso.org/observing/usg/status_pl/run/" + runfile).read()
@@ -587,12 +729,12 @@ if __name__ == '__main__':
                 print('Open:', ResultFile)
                 fh_csv = open(ResultFile, 'w')
                 tmp = string.join(result)
-                print('Write:', ResultFile)
+                print('Write:', len(result), ResultFile)
                 fh_csv.write(tmp)
                 fh_csv.close()
                 print('Close:', ResultFile)
 
-            # read result atpy table
+            # write fitsfile
             if table:
                 # result is the ascii csv in memory
                 print('Read csv into table')
@@ -601,11 +743,12 @@ if __name__ == '__main__':
                 table = Table.read(result, format='ascii',
                                    data_start=data_start,
                                    header_start=header_start)
-                print(table.colnames)
+                if debug or verbose:
+                    print('table.colnames:', table.colnames)
                 print('Number of rows:', len(table))
-                if debug:
-                    print('table.describe:', table.describe)
-                    print('table.shape:', table.shape)
+                #if debug:
+                #    print('table.describe:', table.describe)
+                #    print('table.shape:', table.shape)
                 fitsfile = os.path.join(outpath, fitsfile)
                 print('Writing FITs file:', fitsfile)
                 table.write(fitsfile, overwrite=True)
@@ -614,6 +757,7 @@ if __name__ == '__main__':
             # write the appended results; each ASCII write appends to
             # opened file; ascii data is also appended in memory
 
+            # append the runfile input into a summary object
             print('Run:', run)
             if run == 'A':
                 summary = result
@@ -634,7 +778,7 @@ if __name__ == '__main__':
                 print('Number of rows:', len(new))
                 fh_csv_all = open(os.path.join(outpath, runfiles_all), 'w')
                 fh_csv_all.write(new)
-                print('Write summary completed:', len(new))
+                print('Write summary completed:', len(new), )
 
             print()
             if pause:
