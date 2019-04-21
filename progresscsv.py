@@ -411,7 +411,7 @@ def getargs(verbose=False):
     # there is probably a version function out there
     __version__ = '0.1'
 
-    description = 'This is a template using getargs'
+    description = 'progresscsv command line arguements'
     epilog = """WARNING: Not all options may be supported\n"""
 
     parser = argparse.ArgumentParser(
@@ -434,6 +434,11 @@ def getargs(verbose=False):
     parser.add_argument("--configfile",
                         default=None,
                         help="configuration file")
+
+    parser.add_argument("--stats",
+                        action='store_true',
+                        help="Compute stats")
+
 
     parser.add_argument("--debug",
                         action='store_true',
@@ -628,6 +633,8 @@ if __name__ == '__main__':
     debug = args.debug
     pause = args.pause
     verbose = args.verbose
+
+    stats = args.stats
 
     # concatenate existing files by date
     # append=1
@@ -856,41 +863,44 @@ if __name__ == '__main__':
     print()
 
 
-    colname='run ID'
-    tablecol_unique_info(table, colname)
 
-    colname='OB ID'
-    tablecol_unique_info(table, colname, counts=False)
+    if stats:
 
-    colname='OB status'
-    tablecol_unique_info(table, colname)
+        colname='run ID'
+        tablecol_unique_info(table, colname)
 
-    colname='Status date'
-    tablecol_unique_info(table, colname, counts=False)
+        colname='OB ID'
+        tablecol_unique_info(table, colname, counts=False)
 
-    colname='OB name'
-    tablecol_unique_info(table, colname, counts=False)
+        colname='OB status'
+        tablecol_unique_info(table, colname)
 
-    colname='OD name'
-    tablecol_unique_info(table, colname, counts=True)
+        colname='Status date'
+        tablecol_unique_info(table, colname, counts=False)
 
-    colname = 'Execution time (s)'
-    tablecol_unique_info(table, colname)
+        colname='OB name'
+        tablecol_unique_info(table, colname, counts=False)
 
-    colname = 'Container type'
-    tablecol_unique_info(table, colname)
+        colname='OD name'
+        tablecol_unique_info(table, colname, counts=True)
 
-    colname = 'Container ID'
-    tablecol_unique_info(table, colname, counts=False)
+        colname = 'Execution time (s)'
+        tablecol_unique_info(table, colname)
 
-    colname = 'Seeing'
-    tablecol_unique_info(table, colname, counts=True)
+        colname = 'Container type'
+        tablecol_unique_info(table, colname)
 
-    colname = 'Sky transparency'
-    tablecol_unique_info(table, colname, counts=True)
+        colname = 'Container ID'
+        tablecol_unique_info(table, colname, counts=False)
 
-    colname = 'FLI'
-    tablecol_unique_info(table, colname, counts=True)
+        colname = 'Seeing'
+        tablecol_unique_info(table, colname, counts=True)
+
+        colname = 'Sky transparency'
+        tablecol_unique_info(table, colname, counts=True)
+
+        colname = 'FLI'
+        tablecol_unique_info(table, colname, counts=True)
 
     end = time.time()
     elapsed = end - start
